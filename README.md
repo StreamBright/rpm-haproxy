@@ -1,26 +1,18 @@
-[![Github All Releases](https://img.shields.io/github/downloads/DBezemer/rpm-haproxy/total.svg)](https://github.com/DBezemer/rpm-haproxy/releases)
+# RPMSpec for a HAProxy 1.7+ stable version RPM on CentOS 7
 
-# A Recipe for a haproxy 1.6 stable version RPM on CentOS
-
-Perform the following on a build box as a regular user.
+Perform the following on a build box as a non-root user.
 
 ## Install Prerequisites for RPM Creation
 
-    sudo yum groupinstall 'Development Tools'
+    sudo yum -y install rpmdevtools pcre-devel gcc make openssl-devel rpm-build
+    rpmdev-setuptree
 
-## Checkout this repository
+## Build
 
-    cd /opt
-    git clone https://github.com/DBezemer/rpm-haproxy.git 
-    cd ./rpm-haproxy
-
-## Build using makefile
-    make
+    rpmbuild -bb ~/rpmbuild/SPECS/haproxy.spec
     
 Resulting RPM will be in /opt/rpm-haproxy/rpmbuild/RPMS/
 
 ## Credits
 
 Based on the Red Hat 6.4 RPM spec for haproxy 1.4 combined with work done by [@nmilford](https://www.github.com/nmilford) [@resmo](https://www.github.com/resmo) and [@kevholmes](https://www.github.com/kevholmes)
-
-Additional logging added based on https://www.percona.com/blog/2014/10/03/haproxy-give-me-some-logs-on-centos-6-5/
