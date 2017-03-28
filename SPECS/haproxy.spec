@@ -1,47 +1,26 @@
 %define haproxy_user    haproxy
 %define haproxy_group   %{haproxy_user}
 %define haproxy_home    %{_localstatedir}/lib/haproxy
-
-%if 0%{?rhel} == 7
-    # CentOS 7 forces ".el7.centos", wtf CentOS maintainers...
-    %define dist .el7
-%endif
-
-%if 0%{?rhel} < 7
-    %{!?__global_ldflags: %global __global_ldflags -Wl,-z,relro}
-%endif
+%define dist .el7
 
 Summary: HA-Proxy is a TCP/HTTP reverse proxy for high availability environments
 Name: haproxy
-Version: 1.6.11
+Version: 1.7.4
 Release: 1%{?dist}
 License: GPL
 Group: System Environment/Daemons
 URL: http://www.haproxy.org/
-Source0: http://www.haproxy.org/download/1.6/src/%{name}-%{version}.tar.gz
+Source0: http://www.haproxy.org/download/1.7/src/%{name}-%{version}.tar.gz
 Source1: %{name}.cfg
-%{?el6:Source2: %{name}.init}
-%{?el7:Source2: %{name}.service}
-Source3: %{name}.logrotate
-Source4: %{name}.syslog%{?dist}
+Source2: %{name}.service
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 BuildRequires: pcre-devel make gcc openssl-devel 
 
-
 Requires(pre):      shadow-utils
-
-%if 0%{?el6}
-Requires(post):     chkconfig, initscripts
-Requires(preun):    chkconfig, initscripts
-Requires(postun):   initscripts
-%endif
-
-%if 0%{?el7}
 BuildRequires:      systemd-units
 Requires(post):     systemd
 Requires(preun):    systemd
 Requires(postun):   systemd
-%endif
 
 %description
 HA-Proxy is a TCP/HTTP reverse proxy which is particularly suited for high
@@ -71,7 +50,7 @@ regparm_opts=
 regparm_opts="USE_REGPARM=1"
 %endif
 
-%{__make} %{?_smp_mflags} CPU="generic" TARGET="linux2628" USE_OPENSSL=1 USE_PCRE=1 USE_ZLIB=1 ${regparm_opts} ADDINC="%{optflags}" USE_LINUX_TPROXY=1 ADDLIB="%{__global_ldflags}" DEFINE=-DTCP_USER_TIMEOUT=18
+%{__make} %{?_smp_mflags} CPU="generic" TARGET="linux2628" USE_OPENSSL=1 USE_PCRE=1 USE_ZLIB=1 ${regparm_opts} ADDINC="%{optflags}" ADDLIB="%{__global_ldflags}" USE_LINUX_SPLICE=1 USE_CPU_AFFINITY=1 USE_PCRE_JIT=1
 
 %install
 [ "%{buildroot}" != "/" ] && %{__rm} -rf %{buildroot}
@@ -83,20 +62,11 @@ regparm_opts="USE_REGPARM=1"
 %{__install} -d %{buildroot}%{_sysconfdir}/%{name}/errors
 %{__install} -d %{buildroot}%{_localstatedir}/log/%{name}
 %{__install} -d %{buildroot}%{_mandir}/man1/
-
 %{__install} -s %{name} %{buildroot}%{_sbindir}/
-%if 0%{?el6}
-%{__install} -d %{buildroot}%{_sysconfdir}/rc.d/init.d
-%{__install} -c -m 755 %{SOURCE2} %{buildroot}%{_sysconfdir}/rc.d/init.d/%{name}
-%endif    
-%if 0%{?el7}
 %{__install} -s %{name}-systemd-wrapper %{buildroot}%{_sbindir}/
 %{__install} -p -D -m 0644 %{SOURCE2} %{buildroot}%{_unitdir}/%{name}.service
-%endif
 %{__install} -c -m 644 %{SOURCE1} %{buildroot}%{_sysconfdir}/%{name}/
 %{__install} -c -m 755 examples/errorfiles/*.http %{buildroot}%{_sysconfdir}/%{name}/errors/
-%{__install} -c -m 755 %{SOURCE3} %{buildroot}%{_sysconfdir}/logrotate.d/%{name}
-%{__install} -c -m 755 %{SOURCE4} %{buildroot}%{_sysconfdir}/rsyslog.d/49-%{name}.conf
 %{__install} -c -m 755 doc/%{name}.1 %{buildroot}%{_mandir}/man1/
 
 %clean
@@ -111,70 +81,31 @@ getent passwd %{haproxy_user} >/dev/null || \
 exit 0
  
 %post
-%if 0%{?el7}
 %systemd_post %{name}.service
 systemctl restart rsyslog.service
-%endif
 
-%if 0%{?el6}
-/sbin/chkconfig --add %{name}
-/sbin/service rsyslog restart >/dev/null 2>&1 || :
-%endif
 
 %preun
-%if 0%{?el7}
 %systemd_preun %{name}.service
-%endif
-
-%if 0%{?el6}
-if [ $1 = 0 ]; then
-  /sbin/service %{name} stop >/dev/null 2>&1 || :
-  /sbin/chkconfig --del %{name}
-fi
-%endif
 
 %postun
-%if 0%{?el7}
 %systemd_postun_with_restart %{name}.service
 systemctl restart rsyslog.service
-%endif
-
-%if 0%{?el6}
-if [ "$1" -ge "1" ]; then
-  /sbin/service %{name} condrestart >/dev/null 2>&1 || :
-  /sbin/service rsyslog restart >/dev/null 2>&1 || :
-fi
-%endif
 
 %files
 %defattr(-,root,root)
 %doc CHANGELOG README examples/*.cfg doc/architecture.txt doc/configuration.txt doc/intro.txt doc/management.txt doc/proxy-protocol.txt
 %doc %{_mandir}/man1/%{name}.1*
 %dir %{_localstatedir}/log/%{name}
-
 %attr(0755,root,root) %{_sbindir}/%{name}
-%if 0%{?el6}
-%attr(0755,root,root) %config %_sysconfdir/rc.d/init.d/%{name}
-%endif    
-%if 0%{?el7}
 %attr(0755,root,root) %{_sbindir}/%{name}-systemd-wrapper
 %attr(-,root,root) %{_unitdir}/%{name}.service
-%endif
 %dir %{_sysconfdir}/%{name}
 %{_sysconfdir}/%{name}/errors
 %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/%{name}/%{name}.cfg
-%attr(0644,root,root) %config %{_sysconfdir}/logrotate.d/%{name}
-%attr(0644,root,root) %config %{_sysconfdir}/rsyslog.d/49-%{name}.conf
 
 %changelog
 * Sun Jan 15 2017 David Bezemer <info@davidbezemer.nl>
 - Update for HAproxy 1.6.11
 
-* Sun Oct 23 2016 David Bezemer <info@davidbezemer.nl>
-- Add systemd compatibility
 
-* Sat Oct 22 2016 David Bezemer <info@davidbezemer.nl>
-- reworked installation structure
-- included rsylog config for logging
-- copy default error files
-- updated to 1.6.9
